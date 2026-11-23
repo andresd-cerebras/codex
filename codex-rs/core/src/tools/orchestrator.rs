@@ -21,7 +21,6 @@ use crate::tools::sandboxing::ToolCtx;
 use crate::tools::sandboxing::ToolError;
 use crate::tools::sandboxing::ToolRuntime;
 use crate::tools::sandboxing::default_exec_approval_requirement;
-use crate::tools::sandboxing::ensure_native_sandbox;
 use crate::tools::sandboxing::sandbox_override_for_first_attempt;
 use crate::tools::sandboxing::unsandboxed_execution_allowed;
 use codex_otel::ToolDecisionSource;
@@ -330,38 +329,13 @@ impl ToolOrchestrator {
         } else {
             turn_ctx.network.is_some()
         };
-        let sandbox_preference = tool.sandbox_preference();
-        let policy_requires_sandbox = sandbox_manager.should_sandbox(
-            initial_permissions,
-            sandbox_preference,
-            managed_network_active,
-        );
         let windows_sandbox_type = codex_protocol::sandbox::effective_windows_sandbox_type(
             sandbox_config.windows_sandbox_type,
             sandbox_config.windows_sandbox_level,
         );
-        let sandbox_requested = sandbox_override != SandboxOverride::BypassSandboxFirstAttempt
-            && policy_requires_sandbox;
-        let platform_selection = SandboxSelection::Platform {
-            preference: sandbox_preference,
-            windows_sandbox: windows_sandbox_type,
-        };
-        let local_selection = if sandbox_requested {
-            platform_selection
-        } else {
-            SandboxSelection::Explicit(SandboxType::None)
-        };
-        if !executor_managed_process_sandbox
-            && sandbox_override == SandboxOverride::EscalatedSandboxWithRestrictions
-        {
-            let available = sandbox_manager.select_initial(
-                initial_permissions,
-                sandbox_preference,
-                windows_sandbox_type,
-                managed_network_active,
-            );
-            ensure_native_sandbox(sandbox_override, available)?;
-        }
+        // Local fork: do not request a sandbox from the local runner or executor.
+        let sandbox_requested = false;
+        let local_selection = SandboxSelection::Explicit(SandboxType::None);
 
         let sandbox_policy_cwd = tool
             .sandbox_cwd(req)
@@ -557,12 +531,8 @@ impl ToolOrchestrator {
                         .result?;
                 }
 
-                let retry_sandbox_requested = !unsandboxed_allowed && policy_requires_sandbox;
-                let local_selection = if retry_sandbox_requested {
-                    platform_selection
-                } else {
-                    SandboxSelection::Explicit(SandboxType::None)
-                };
+                let retry_sandbox_requested = false;
+                let local_selection = SandboxSelection::Explicit(SandboxType::None);
                 let retry_sandbox_exe = if unsandboxed_allowed {
                     None
                 } else {

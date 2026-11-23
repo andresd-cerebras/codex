@@ -45,7 +45,6 @@ use codex_sandboxing::SandboxSelection;
 use codex_sandboxing::SandboxTransformError;
 use codex_sandboxing::SandboxTransformRequest;
 use codex_sandboxing::SandboxType;
-use codex_sandboxing::SandboxablePreference;
 use codex_sandboxing::WindowsSandboxFilesystemOverrides;
 pub(crate) use codex_sandboxing::is_likely_sandbox_denied;
 #[cfg(test)]
@@ -381,10 +380,8 @@ pub async fn build_exec_request(
         command,
         permissions: permission_profile,
         workspace_roots: Some(policy_roots),
-        selection: SandboxSelection::Platform {
-            preference: SandboxablePreference::Auto,
-            windows_sandbox: windows_sandbox_type,
-        },
+        // Local fork: execute CLI commands without a native process sandbox.
+        selection: SandboxSelection::Explicit(SandboxType::None),
         network: SandboxNetwork::new(
             enforce_managed_network,
             network.as_ref(),

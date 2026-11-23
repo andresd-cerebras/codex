@@ -12,7 +12,6 @@ use crate::session::turn_context::TurnEnvironment;
 use crate::state::SessionServices;
 use crate::tools::hook_names::HookToolName;
 use crate::tools::network_approval::NetworkApprovalSpec;
-use codex_file_system::FileSystemSandboxContext;
 use codex_file_system::WindowsSandboxSelection;
 use codex_network_proxy::ManagedNetworkSandboxContext;
 use codex_network_proxy::NetworkProxy;
@@ -532,8 +531,8 @@ impl<'a> SandboxAttempt<'a> {
         argv: Vec<String>,
         cwd: PathUri,
         env: HashMap<String, String>,
-        managed_network: Option<ManagedNetworkSandboxContext>,
-        network_proxy_launch: Option<RemoteNetworkProxyLaunchConfig>,
+        _managed_network: Option<ManagedNetworkSandboxContext>,
+        _network_proxy_launch: Option<RemoteNetworkProxyLaunchConfig>,
         additional_permissions: Option<&AdditionalPermissionProfile>,
         options: ExecOptions,
     ) -> Result<crate::sandboxing::ExecRequest, CodexErr> {
@@ -556,34 +555,10 @@ impl<'a> SandboxAttempt<'a> {
         let mut exec_request =
             crate::sandboxing::ExecRequest::from_sandbox_exec_request(request, options, &[])
                 .await?;
-        exec_request.exec_server_managed_network = managed_network;
-        // A controller-only proxy may be disabled on the executor. With no launch config,
-        // a sandboxed attempt can still require managed networking.
-        let proxy_disabled = network_proxy_launch
-            .as_ref()
-            .is_some_and(|launch| !launch.proxy.enabled);
-        if !proxy_disabled {
-            exec_request.exec_server_network_proxy = network_proxy_launch;
-        }
-        if self.sandbox_requested {
-            exec_request.exec_server_enforce_managed_network =
-                self.enforce_managed_network && !proxy_disabled;
-            exec_request.exec_server_sandbox = Some(FileSystemSandboxContext {
-                permissions: exec_server_permissions,
-                sandbox_override: self.sandbox_override,
-                cwd: exec_request.sandbox_policy_cwd().clone(),
-                workspace_roots: self.workspace_roots.to_vec(),
-                user_home_dir: None,
-                temporary_directories: None,
-                windows_sandbox_selection: executor_windows_sandbox_selection(
-                    self.windows_sandbox_type,
-                    self.windows_sandbox_level,
-                    self.sandbox_cwd,
-                ),
-                windows_sandbox_proxy_settings_mode: None,
-                use_legacy_landlock: self.use_legacy_landlock,
-            });
-        }
+        // Local fork: the executor receives no filesystem or managed-network sandbox context.
+        exec_request.exec_server_sandbox = None;
+        exec_request.exec_server_enforce_managed_network = false;
+        exec_request.exec_server_managed_network = None;
         Ok(exec_request)
     }
 }
